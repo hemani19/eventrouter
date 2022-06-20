@@ -18,6 +18,7 @@ package sinks
 
 import (
 	"bytes"
+	"crypto/tls"
 	"net/http"
 
 	"github.com/eapache/channels"
@@ -70,6 +71,13 @@ func NewHTTPSink(sinkURL string, overflow bool, bufferSize int) *HTTPSink {
 	h.httpClient = pester.New()
 	h.httpClient.Backoff = pester.ExponentialJitterBackoff
 	h.httpClient.MaxRetries = 10
+
+	// Ignoring cert verify
+	customTransport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	h.httpClient.Transport = customTransport
+
 	// Let the body buffer be 4096 bytes at the start. It will be grown if
 	// necessary.
 	h.bodyBuf = bytes.NewBuffer(make([]byte, 0, 4096))
@@ -132,7 +140,7 @@ func (h *HTTPSink) drainEvents(events []EventData) {
 
 	var written int64
 	for _, evt := range events {
-		w, err := evt.WriteRFC5424(h.bodyBuf)
+		w, err := evt.WriteFlattenedJSON(h.bodyBuf)
 		written += w
 		if err != nil {
 			glog.Warningf("Could not write to event request body (wrote %v) bytes: %v", written, err)
